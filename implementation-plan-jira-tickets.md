@@ -28,7 +28,7 @@ Set up GitHub Actions CI/CD pipeline for build, test, and deployment to Azure.
 - [ ] Coverage threshold enforced (fail if <80%)
 
 **Technical Notes:**
-- Use dotnet 8.0 SDK image
+- Use dotnet 10 SDK image
 - Cache NuGet packages between runs
 - Tag images: `acr.azurecr.io/nliven-sms:latest` and `acr.azurecr.io/nliven-sms:${{ github.sha }}`
 - Dev environment deploys automatically on main branch
@@ -106,7 +106,7 @@ Create the foundational .NET solution structure with clean architecture layers.
 - [ ] GitHub Actions workflow files included
 
 **Technical Notes:**
-- Use .NET 8.0
+- Use .NET 10
 - Follow clean architecture pattern
 - Core should have no external dependencies
 - Api references Infrastructure, Infrastructure references Core
@@ -734,8 +734,8 @@ Create Dockerfile and docker-compose for development and deployment.
 - [ ] Docker image builds successfully and runs locally
 
 **Technical Notes:**
-- Base image: mcr.microsoft.com/dotnet/aspnet:8.0
-- Build image: mcr.microsoft.com/dotnet/sdk:8.0
+- Base image: mcr.microsoft.com/dotnet/aspnet:10
+- Build image: mcr.microsoft.com/dotnet/sdk:10
 - Health check: HEALTHCHECK CMD curl -f http://localhost:80/health || exit 1
 - SQL Server image: mcr.microsoft.com/mssql/server:latest
 - Service Bus emulator: Azure Storage emulator (Azurite)
@@ -751,7 +751,7 @@ Create comprehensive developer setup guide.
 
 **Acceptance Criteria:**
 - [ ] README.md with architecture overview
-- [ ] Prerequisites: .NET 8.0 SDK, Docker, Git
+- [ ] Prerequisites: .NET 10 SDK, Docker, Git
 - [ ] Local development setup steps
 - [ ] Run with docker-compose (one command)
 - [ ] Run tests locally
