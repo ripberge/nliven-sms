@@ -12,6 +12,8 @@
 
 **Overview:** Service development and infrastructure setup happen in parallel. Story 1.1-1.2 can start immediately without waiting for Azure infrastructure. Stories 1.3-1.5 run in parallel.
 
+**Event Payload Structure**: The `SendOrderConfirmationSms` event carries enriched data from the monolith, including OrderId, VenueId, CustomerId, PhoneNumber, CustomerName, OrderTotal, TicketCount, and EventTimestamp. This self-contained payload eliminates the need for the SMS service to query shared monolith databases.
+
 ### Story 1.1: Project Setup and Solution Structure
 **Story Points:** 3
 **Priority:** Highest
@@ -70,7 +72,7 @@ Create a minimal API service that starts quickly with health check endpoints.
 
 ---
 
-### Story 1.3: GitHub Actions CI/CD Pipeline Setup
+### Story 1.3.1: GitHub Actions CI/CD Pipeline Setup
 **Story Points:** 5
 **Priority:** Highest
 
@@ -93,13 +95,13 @@ Set up GitHub Actions CI/CD pipeline for build, test, and deployment to Azure.
 - Tag images: `acr.azurecr.io/nliven-sms:latest` and `acr.azurecr.io/nliven-sms:${{ github.sha }}`
 - Dev environment deploys automatically on main branch
 - Production requires manual approval
-- Can run in parallel with Story 1.2
+- Can run in parallel with Story 1.3.2
 
 **Dependencies:** Story 1.1 - Can start immediately after
 
 ---
 
-### Story 1.4: Terraform Infrastructure - Base Resources
+### Story 1.3.2: Terraform Infrastructure - Base Resources
 **Story Points:** 8
 **Priority:** Highest
 
@@ -128,7 +130,7 @@ Create Terraform configuration for core Azure resources.
 
 ---
 
-### Story 1.5: Terraform Infrastructure - Container Apps Deployment
+### Story 1.3.3: Terraform Infrastructure - Container Apps Deployment
 **Story Points:** 5
 **Priority:** Highest
 
@@ -153,11 +155,41 @@ Create Terraform configuration to deploy service to Azure Container Apps.
 - Scale rule: CPU > 70% triggers scale out
 - Manual scale down to 0 replicas not allowed for reliability
 
-**Dependencies:** Story 1.4 (Terraform base), Story 1.3 (GitHub Actions) - Merges both tracks
+**Dependencies:** Story 1.3.2 (Terraform base), Story 1.3.1 (GitHub Actions) - Merges both tracks
 
 ---
 
 ## Sprint 2: Database Schema & Domain Models
+
+### Story 2.0: Database DDL - Enum/Lookup Tables
+**Story Points:** 3
+**Priority:** Highest
+
+**Description:**
+Create enum/lookup tables for status values and provider references used across SMS service tables.
+
+**Acceptance Criteria:**
+- [ ] SQL migration script created for all 5 enum tables
+- [ ] `ProviderNames` table: ID (PK), Name (unique varchar(50)), IsActive (bit), CreatedAt
+- [ ] `VenuePhoneNumberStatuses` table: ID (PK), Name (unique varchar(50)), IsActive (bit), CreatedAt
+- [ ] `SmsConsentStatuses` table: ID (PK), Name (unique varchar(50)), IsActive (bit), CreatedAt
+- [ ] `ConsentSources` table: ID (PK), Name (unique varchar(50)), IsActive (bit), CreatedAt
+- [ ] `SmsSendHistoryStatuses` table: ID (PK), Name (unique varchar(30)), IsActive (bit), CreatedAt
+- [ ] Seed data inserted: 'twilio', 'active'/'inactive'/'released', 'opted_in'/'opted_out', etc.
+- [ ] Clustered index on ID, non-clustered index on Name
+- [ ] Rollback script included
+- [ ] Migration file added to project
+
+**Technical Notes:**
+- Creates referential integrity foundation for business tables
+- All enum tables follow same pattern: int ID PK, unique name, IsActive flag, CreatedAt timestamp
+- Seed data should be inserted after table creation
+- These tables must exist before Stories 2.1, 2.2, 2.3 create foreign key constraints
+- Use IDENTITY(1,1) for ID column
+
+**Dependencies:** Story 1.3.3 (database exists)
+
+---
 
 ### Story 2.1: Database DDL - VenuePhoneNumbers Table
 **Story Points:** 2
@@ -168,17 +200,21 @@ Create the database schema for venue phone number assignments.
 
 **Acceptance Criteria:**
 - [ ] SQL migration script created for `VenuePhoneNumbers` table
-- [ ] Columns: Id (PK), VenueId (FK), PhoneNumber, ProviderName, CreatedAt, UpdatedAt
-- [ ] Unique constraint on VenueId + ProviderName
-- [ ] Index on VenueId
+- [ ] Columns: ID (int PK), VenueID (int FK to Venue.ID), PhoneNumber (varchar(20)), ProviderID (varchar(100)), ProviderNameID (int FK to ProviderNames.ID), StatusID (int FK to VenuePhoneNumberStatuses.ID), AssignedAt, ReleasedAt, CreatedAt, UpdatedAt
+- [ ] Unique constraint: (VenueID, ProviderNameID) WHERE StatusID = 1
+- [ ] Index on VenueID
+- [ ] Index on PhoneNumber
 - [ ] Rollback script included
 - [ ] Migration file added to project
 
 **Technical Notes:**
-- Use UNIQUEIDENTIFIER for Id
-- Migration tool: Entity Framework Core Migrations
-- Store in `/src/SmsService.Infrastructure/Migrations/` folder
-- This is DDL-only, no EF entity mapping yet
+- VenueID foreign key references Venue.ID in nLiven monolith database
+- ProviderNameID references ProviderNames enum table (FK constraint required)
+- StatusID references VenuePhoneNumberStatuses enum table (FK constraint required)
+- Unique constraint ensures one active provider per venue per provider type
+- ProviderID is provider-specific identifier (e.g., Twilio Phone Number SID)
+
+**Dependencies:** Story 2.0 (enum tables must exist first)
 
 ---
 
@@ -187,43 +223,58 @@ Create the database schema for venue phone number assignments.
 **Priority:** Highest
 
 **Description:**
-Create the database schema for SMS consent tracking.
+Create the database schema for SMS consent tracking per venue + phone number.
 
 **Acceptance Criteria:**
 - [ ] SQL migration script created for `SmsConsent` table
-- [ ] Columns: Id (PK), VenueId, PhoneNumber, ConsentStatus, CreatedAt, UpdatedAt
-- [ ] Unique constraint on VenueId + PhoneNumber
+- [ ] Columns: ID (int PK), VenueID (int FK to Venue.ID), PhoneNumber (varchar(20)), StatusID (int FK to SmsConsentStatuses.ID), ConsentSourceID (int FK to ConsentSources.ID), InitialConsentAt, OptedOutAt, OptedInAt, CreatedAt, UpdatedAt
+- [ ] Unique constraint: (VenueID, PhoneNumber)
+- [ ] Index on VenueID
 - [ ] Index on PhoneNumber
-- [ ] Index on VenueId
 - [ ] Rollback script included
 - [ ] Migration file added to project
 
 **Technical Notes:**
-- Status values: 'opted_in', 'opted_out'
-- ConsentStatus column type: VARCHAR(20)
-- Separate DDL from entity mapping (Story 2.5)
+- VenueID foreign key references Venue.ID in nLiven monolith
+- StatusID references SmsConsentStatuses enum table ('opted_in' or 'opted_out')
+- ConsentSourceID references ConsentSources enum table ('checkout', 'account_settings', etc.), nullable
+- PhoneNumber uses E.164 format
+- All timestamp fields use datetime2 type
+- Supports compliance and audit queries
+
+**Dependencies:** Story 2.0 (enum tables must exist first)
 
 ---
 
 ### Story 2.3: Database DDL - SmsSendHistory Table
-**Story Points:** 2
+**Story Points:** 3
 **Priority:** Highest
 
 **Description:**
-Create the database schema for SMS send history tracking.
+Create the database schema for SMS send history tracking with referential integrity.
 
 **Acceptance Criteria:**
 - [ ] SQL migration script created for `SmsSendHistory` table
-- [ ] Columns: Id (PK), OrderId, VenueId, PhoneNumber, Status, Message, ProviderName, ProviderMessageId, ErrorCode, CreatedAt
-- [ ] Indexes on: OrderId, PhoneNumber, VenueId, CreatedAt
+- [ ] Columns: ID (bigint PK), OrderID (uniqueidentifier, indexed), VenueID (int FK to Venue.ID, indexed), VenuePhoneNumberID (int FK to VenuePhoneNumbers.ID), CustomerID (uniqueidentifier), CustomerPhoneNumber (varchar(20), indexed), Message (varchar(500)), ProviderNameID (int FK to ProviderNames.ID), StatusID (int FK to SmsSendHistoryStatuses.ID), ProviderMessageID (varchar(100)), ErrorCode (varchar(50)), CreatedAt
+- [ ] Composite index: (VenueID, CreatedAt) for compliance queries
+- [ ] Composite index: (CustomerPhoneNumber, VenueID) for customer history
+- [ ] Clustered index: CreatedAt DESC for time-range queries
 - [ ] Rollback script included
 - [ ] Migration file added to project
 
 **Technical Notes:**
-- Status values: 'sent', 'failed', 'skipped_no_consent', 'blocked_opted_out'
-- Status column type: VARCHAR(30)
-- Large table expected, optimize indexes for queries
-- Separate DDL from entity mapping (Story 2.4)
+- ID is bigint to support millions of SMS records
+- VenueID foreign key references Venue.ID in nLiven monolith
+- VenuePhoneNumberID FK references VenuePhoneNumbers.ID (the venue's assigned sender phone)
+- ProviderNameID references ProviderNames enum table
+- StatusID references SmsSendHistoryStatuses enum table
+- Message field: varchar(500) max length for SMS content
+- ProviderMessageID: provider's tracking ID (e.g., Twilio MessageSid), nullable
+- ErrorCode: provider-specific error code if status = 'failed', nullable
+- CreatedAt used for temporal queries and audit
+- Large table expected, optimize for time-range queries and compliance lookups
+
+**Dependencies:** Story 2.0 (enum tables), Story 2.1 (VenuePhoneNumbers must exist)
 
 ---
 
@@ -232,24 +283,29 @@ Create the database schema for SMS send history tracking.
 **Priority:** High
 
 **Description:**
-Create all domain models and value objects without EF entity configurations.
+Create all domain models and DTOs without EF entity configurations.
 
 **Acceptance Criteria:**
-- [ ] `SmsConsent` domain model created (record or class)
-- [ ] `SmsSendHistory` domain model created
-- [ ] `VenuePhoneNumber` domain model created
-- [ ] `SendOrderConfirmationSmsEvent` DTO created
-- [ ] Enums: `ConsentStatus`, `SendStatus`, `ProviderName`
-- [ ] Value objects: `PhoneNumber` with validation
+- [ ] `SendOrderConfirmationSmsEvent` DTO created (immutable record with OrderId, VenueID, CustomerID, PhoneNumber, CustomerName, OrderTotal, TicketCount, EventTimestamp)
+- [ ] `SmsConsent` domain model created (venue + phone scoped consent with StatusID reference)
+- [ ] `SmsSendHistory` domain model created (audit record with FK references)
+- [ ] `VenuePhoneNumber` domain model created (vendor phone assignments with StatusID/ProviderNameID)
+- [ ] Enums: `ConsentStatus`, `SendStatus`, `ProviderName` (reflecting enum table values)
+- [ ] Value objects: `PhoneNumber` with E.164 validation
 - [ ] All models have XML documentation
-- [ ] Unit tests for PhoneNumber validation
+- [ ] Unit tests for PhoneNumber validation and SendOrderConfirmationSmsEvent structure
 
 **Technical Notes:**
-- Use records for immutable DTOs (SendOrderConfirmationSmsEvent)
-- Use classes for aggregate roots (SmsConsent, SmsSendHistory)
-- PhoneNumber value object: validate format, length
+- `SendOrderConfirmationSmsEvent`: Immutable record containing all order context from event payload
+- Use records for immutable DTOs
+- Use classes for aggregate roots (SmsConsent, SmsSendHistory, VenuePhoneNumber)
+- PhoneNumber value object: validate E.164 format, length 10-15 digits
+- No ORM attributes yet—focus on pure domain logic
 - Models should NOT be EF-mapped yet (separation of concerns)
 - Models live in SmsService.Core project
+- Domain models use int IDs and int FK references (VenueID, VenuePhoneNumberID, StatusID, etc.)
+
+**Dependencies:** Story 2.0, 2.1, 2.2, 2.3 (understand the schema before modeling)
 
 ---
 
@@ -282,21 +338,19 @@ Create EF Core entity configurations mapping domain models to database schema.
 **Priority:** High
 
 **Description:**
-Define repository interfaces for data access.
+Define repository interfaces for SMS-owned tables.
 
 **Acceptance Criteria:**
-- [ ] `IConsentRepository` interface created (CRUD for consent)
-- [ ] `IHistoryRepository` interface created (write + query)
-- [ ] `IOrderRepository` interface created (read-only, external)
-- [ ] All methods are async (CancellationToken support)
-- [ ] XML documentation on all methods
-- [ ] Interfaces in Core project
+- [ ] `IConsentRepository` interface defined
+- [ ] `IHistoryRepository` interface defined
+- [ ] `IPhoneNumberRepository` interface defined
+- [ ] All methods async with CancellationToken support
+- [ ] XML documentation for all interfaces
 
 **Technical Notes:**
 - Repository pattern for domain models, not EF entities
-- IOrderRepository queries external shared database
-- Avoid N+1 queries (think about projection)
-- Return domain models, not EF entities
+- Interfaces in Core project
+- Focus on SMS-owned tables only (no external reads)
 
 ---
 
@@ -379,26 +433,30 @@ Create a simple template engine for formatting SMS messages.
 **Priority:** High
 
 **Description:**
-Implement the main orchestration logic for processing SMS send requests.
+Implement SMS orchestration logic that processes enriched events from Service Bus.
 
 **Acceptance Criteria:**
-- [ ] `SmsOrchestrator` class created in Core/Services
-- [ ] `ProcessOrderConfirmationAsync(event)` implements full flow
-- [ ] Order validation (fetch order, check if cancelled)
-- [ ] Consent check integration
-- [ ] Message formatting
-- [ ] SMS provider call with error handling
-- [ ] History recording
-- [ ] All error scenarios handled gracefully
-- [ ] Unit tests with mocked dependencies (>80% coverage)
-- [ ] Detailed logging at each step
+- [ ] `SmsOrchestrator` class created
+- [ ] `ProcessOrderConfirmationAsync(SendOrderConfirmationSmsEvent)` method
+- [ ] Consent check against `SmsConsent` table
+- [ ] Venue phone number lookup from `VenuePhoneNumbers`
+- [ ] Message formatting using template + event data
+- [ ] Provider call via `ISmsProvider`
+- [ ] History recording in `SmsSendHistory`
+- [ ] Error handling for all failure scenarios
+- [ ] Unit tests >80% coverage
+- [ ] Structured logging throughout
 
 **Technical Notes:**
-- This is the domain service orchestrator
-- Follow design doc flow (check consent before publishing event!)
-- Handle all error codes from provider
-- Always complete the message (record even skipped sends)
-- Log correlation ID for tracing
+- Receives `SendOrderConfirmationSmsEvent` from Service Bus (already contains all order context)
+- Step 1: Check `SmsConsent` for VenueId + PhoneNumber (local table only, no external reads)
+- Step 2: Lookup `VenuePhoneNumbers` to get sender number for venue
+- Step 3: Format message using template + order data from event (no database lookup needed)
+- Step 4: Call `ISmsProvider.SendSmsAsync()`
+- Step 5: Record result in `SmsSendHistory`
+- Step 6: Emit metrics to Datadog
+- Error handling: Retry on transient failures, record permanent failures with error code
+- All database interactions are to SMS-owned tables only; no monolith schema dependency
 
 ---
 
@@ -411,17 +469,15 @@ Implement the main orchestration logic for processing SMS send requests.
 **Priority:** High
 
 **Description:**
-Implement the consent repository using Entity Framework.
+Implement consent repository with EF Core.
 
 **Acceptance Criteria:**
-- [ ] `ConsentRepository` implements `IConsentRepository`
-- [ ] `GetByPhoneNumberAsync(venueId, phoneNumber)`
-- [ ] `CreateAsync(consent)`
-- [ ] `UpdateAsync(consent)`
-- [ ] `DeleteAsync(id)`
-- [ ] Proper error handling for database exceptions
-- [ ] Integration tests with real database (Testcontainers)
-- [ ] Async/await throughout
+- [ ] `ConsentRepository` class implementing `IConsentRepository`
+- [ ] `GetByPhoneNumberAsync(venueId, phoneNumber)` method
+- [ ] `Create/Update/DeleteAsync` methods
+- [ ] Error handling for constraint violations
+- [ ] Integration tests with EF Core
+- [ ] Async/await pattern throughout
 
 **Technical Notes:**
 - Use async database calls
@@ -454,27 +510,26 @@ Implement the history repository for audit tracking.
 
 ---
 
-### Story 4.3: Order Repository (Read-Only External)
-**Story Points:** 3
+### Story 4.3: VenuePhoneNumber Repository Implementation
+**Story Points:** 2
 **Priority:** High
 
 **Description:**
-Create read-only repository for accessing shared order and customer data.
+Implement phone number repository with EF Core.
 
 **Acceptance Criteria:**
-- [ ] Separate DbContext for external Orders database
-- [ ] `OrderRepository` implements `IOrderRepository`
-- [ ] `GetOrderWithCustomerAsync(orderId)` - fetch order + customer
-- [ ] Projection: fetch only needed fields (OrderNumber, CustomerName, etc.)
-- [ ] Handle missing/cancelled orders (return null)
-- [ ] Use AsNoTracking() for read-only
-- [ ] Integration tests with test data
+- [ ] `PhoneNumberRepository` class implementing `IPhoneNumberRepository`
+- [ ] `GetActiveByVenueAsync(venueId)` method
+- [ ] `Create/Update/ReleaseAsync` methods
+- [ ] Unique constraint enforcement for active numbers
+- [ ] Integration tests with EF Core
+- [ ] Async/await pattern throughout
 
 **Technical Notes:**
-- Separate DbContext: `OrdersDbContext` (read-only)
-- Connection string from appsettings (Orders.ConnectionString)
-- No write operations in this repository
-- Consider caching for high-volume reads (future)
+- Tracks vendor-provided phone numbers per venue
+- Support provider-specific IDs (Twilio SID, etc.)
+- Handle phone number release/cleanup
+- Optimize for venue lookups
 
 ---
 
