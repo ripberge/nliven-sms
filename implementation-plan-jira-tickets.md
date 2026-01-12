@@ -72,7 +72,42 @@ Create a minimal API service that starts quickly with health check endpoints.
 
 ---
 
-### Story 1.3.1: GitHub Actions CI/CD Pipeline Setup
+### Story 1.3: MVP - Plivo SMS Provider Integration
+**Story Points:** 8
+**Priority:** Highest
+
+**Description:**
+Create a minimal viable product that can send SMS messages via Plivo API. This is a crude implementation focused on getting a working end-to-end test before full infrastructure deployment.
+
+**Acceptance Criteria:**
+- [ ] Plivo NuGet package integrated
+- [ ] `ISmsProvider` interface created in Core (abstract SendSmsAsync method)
+- [ ] `PlivoSmsProvider` class created implementing `ISmsProvider`
+- [ ] `POST /api/test-sms` endpoint for manual SMS testing
+- [ ] Request body: `{ "phoneNumber": "+1...", "message": "Test message" }`
+- [ ] Response: `{ "success": true, "messageId": "..." }` or error response
+- [ ] Plivo API credentials from appsettings (not Key Vault yet)
+- [ ] Structured logging for SMS send attempts
+- [ ] Unit tests for PlivoSmsProvider (with mocked Plivo client)
+- [ ] Can test locally without Azure infrastructure or database
+- [ ] Runnable via `docker-compose up` + curl or Postman
+
+**Technical Notes:**
+- Crude implementation: hardcoded test sender number is acceptable
+- No database, consent checks, or orchestrator logic yet - just plain send
+- No authentication on test endpoint (MVP only, remove before prod)
+- Error handling: map basic Plivo errors (invalid phone, auth failure)
+- Plivo SDK NuGet: use latest stable version
+- Phone number validation: basic E.164 format check
+- Message validation: max 1600 characters for SMS
+- Logging: include phone (masked), message length, API response status
+- Can be deployed to dev environment immediately for testing
+
+**Dependencies:** Story 1.2 - Needs working minimal API
+
+---
+
+### Story 1.4.1: GitHub Actions CI/CD Pipeline Setup
 **Story Points:** 5
 **Priority:** Highest
 
@@ -95,13 +130,13 @@ Set up GitHub Actions CI/CD pipeline for build, test, and deployment to Azure.
 - Tag images: `acr.azurecr.io/nliven-sms:latest` and `acr.azurecr.io/nliven-sms:${{ github.sha }}`
 - Dev environment deploys automatically on main branch
 - Production requires manual approval
-- Can run in parallel with Story 1.3.2
+- Can run in parallel with Story 1.4.2
 
 **Dependencies:** Story 1.1 - Can start immediately after
 
 ---
 
-### Story 1.3.2: Terraform Infrastructure - Base Resources
+### Story 1.4.2: Terraform Infrastructure - Base Resources
 **Story Points:** 8
 **Priority:** Highest
 
@@ -130,7 +165,7 @@ Create Terraform configuration for core Azure resources.
 
 ---
 
-### Story 1.3.3: Terraform Infrastructure - Container Apps Deployment
+### Story 1.4.3: Terraform Infrastructure - Container Apps Deployment
 **Story Points:** 5
 **Priority:** Highest
 
@@ -155,7 +190,7 @@ Create Terraform configuration to deploy service to Azure Container Apps.
 - Scale rule: CPU > 70% triggers scale out
 - Manual scale down to 0 replicas not allowed for reliability
 
-**Dependencies:** Story 1.3.2 (Terraform base), Story 1.3.1 (GitHub Actions) - Merges both tracks
+**Dependencies:** Story 1.4.2 (Terraform base), Story 1.4.1 (GitHub Actions) - Merges both tracks
 
 ---
 
@@ -838,7 +873,36 @@ Create comprehensive developer setup guide.
 
 ---
 
-## Sprint 10: Testing & Observability
+## Pre-Production Checklist
+
+### Testing Requirements
+All work items must include:
+- Unit tests for new code (>80% coverage target)
+- Integration tests where applicable
+- Mock all external dependencies (ISmsProvider, repositories, Service Bus)
+- xUnit test framework with Moq for mocking
+- Tests run in CI/CD pipeline on every push
+
+### Documentation Requirements
+All work items must include:
+- XML/code comments on public classes and methods
+- Technical decision notes in commit messages
+- API documentation (Swagger/OpenAPI for endpoints)
+- Architecture Decision Records (ADRs) for major design choices
+- README updates reflecting changes
+- Runbooks for operational procedures
+
+---
+
+## Risk Register
+
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| Multiple deployments = more production incidents | High | Feature flag enables quick rollback, comprehensive testing, monitoring |
+| Database schema drift | Medium | Versioned migrations, preview environment testing |
+| Service Bus message backlog | Medium | Auto-scaling configured, load testing in sprint 9 |
+| Twilio API rate limits | Medium | Rate limiting implemented, monitor usage |
+| Key Vault secret rotation | Low | Automatic rotation policy configured |
 
 ### Story 10.1: Unit Test Suite
 **Story Points:** 5
