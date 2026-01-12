@@ -83,14 +83,110 @@ See [sms-architecture-design.md](sms-architecture-design.md) for detailed archit
 
 ## Development Workflow
 
+### Setting Up Pre-Commit Hooks
+
+Code formatting with CSharpier runs automatically on commit to maintain consistent style. Setup instructions differ by platform:
+
+#### macOS
+
+1. **Install pre-commit framework**
+   ```bash
+   brew install pre-commit
+   ```
+
+2. **Install git hooks**
+   ```bash
+   cd nliven-sms
+   pre-commit install
+   ```
+
+3. **Verify setup** (optional)
+   ```bash
+   pre-commit run --all-files
+   ```
+
+#### Windows (PowerShell)
+
+1. **Install pre-commit framework using pip**
+   ```powershell
+   # Option A: Using pipx (recommended)
+   pipx install pre-commit
+   
+   # Option B: Using pip
+   pip install pre-commit
+   ```
+
+2. **Install git hooks**
+   ```powershell
+   cd nliven-sms
+   pre-commit install
+   ```
+
+3. **Verify setup** (optional)
+   ```powershell
+   pre-commit run --all-files
+   ```
+
+#### Linux
+
+1. **Install pre-commit framework**
+   ```bash
+   sudo apt-get install python3-pip
+   pip3 install pre-commit
+   ```
+
+2. **Install git hooks**
+   ```bash
+   cd nliven-sms
+   pre-commit install
+   ```
+
+3. **Verify setup** (optional)
+   ```bash
+   pre-commit run --all-files
+   ```
+
+### What Pre-Commit Hooks Do
+
+When you commit code:
+1. **dotnet tool restore** - Ensures CSharpier is installed
+2. **CSharpier** - Automatically formats all C# files to project standards
+
+If CSharpier makes changes, the commit will fail. Simply `git add` the formatted files and commit again.
+
+### Troubleshooting Pre-Commit
+
+**Hook not running on commit?**
+```bash
+# Verify hooks are installed
+cat .git/hooks/pre-commit
+
+# Re-install if needed
+pre-commit install --install-hooks
+```
+
+**CSharpier not found?**
+```bash
+# Restore .NET tools manually
+dotnet tool restore
+```
+
+**Want to skip hooks for a commit?**
+```bash
+git commit --no-verify  # Use with caution!
+```
+
+### Standard Development Workflow
+
 1. Create feature branch from `main`
 2. Make changes with tests
 3. Ensure coverage >80%
-4. Push to GitHub (triggers CI/CD)
-5. Create Pull Request
-6. Code review and merge to `main`
-7. Automatic deploy to dev environment
-8. Manual approval to deploy to production
+4. Commit (pre-commit hooks auto-format code)
+5. Push to GitHub (triggers CI/CD)
+6. Create Pull Request
+7. Code review and merge to `main`
+8. Automatic deploy to dev environment
+9. Manual approval to deploy to production
 
 ## Deployment
 
