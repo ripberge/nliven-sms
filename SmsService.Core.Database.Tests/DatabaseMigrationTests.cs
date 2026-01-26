@@ -77,10 +77,24 @@ public class DatabaseMigrationTests
                 .OrderBy(n => n)
                 .ToList();
 
-            Assert.Equal(snapshotProps.Count, currentProps.Count);
+            // Compare property names - provide detailed error on mismatch
+            if (!snapshotProps.SequenceEqual(currentProps))
+            {
+                var missing = snapshotProps.Except(currentProps).ToList();
+                var added = currentProps.Except(snapshotProps).ToList();
+                var message = $"Property mismatch in entity '{entityName}'.\n";
+                if (added.Any())
+                {
+                    message += $"  Added properties (need migration): {string.Join(", ", added)}\n";
+                }
+                if (missing.Any())
+                {
+                    message += $"  Removed properties (need migration): {string.Join(", ", missing)}\n";
+                }
+                Assert.Fail(message + "  Run: dotnet ef migrations add <MigrationName> in SmsService.Migrations");
+            }
 
-            // Compare property names
-            Assert.Equal(snapshotProps, currentProps);
+            Assert.Equal(snapshotProps.Count, currentProps.Count);
         }
     }
 }
