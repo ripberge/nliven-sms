@@ -29,6 +29,8 @@ jobs:
       with:
         repository: ripberge/sms-service-db
         path: sms-service-db
+        ref: main
+        token: ${{ secrets.GITHUB_TOKEN }}
     
     - name: Setup .NET
       uses: actions/setup-dotnet@v3
