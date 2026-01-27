@@ -47,6 +47,11 @@ OpenCover/
 # User Secrets
 secrets.json
 
+# Development settings
+appsettings.Development.json
+
 # Rider
 .idea/
 *.sln.iml
+
+appsettings.Development.json
