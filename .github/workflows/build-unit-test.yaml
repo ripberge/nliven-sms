@@ -22,6 +22,13 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
+      with:
+        path: sms-service
+    
+    - uses: actions/checkout@v4
+      with:
+        repository: ripberge/sms-service-db
+        path: sms-service-db
     
     - name: Setup .NET
       uses: actions/setup-dotnet@v3
@@ -29,10 +36,10 @@ jobs:
         dotnet-version: '10.0.x'
 
     - name: Restore
-      run: dotnet restore SmsService.sln
+      run: dotnet restore sms-service/SmsService.sln
 
     - name: Build
-      run: dotnet build SmsService.sln --no-restore --property:WarningLevel=0
+      run: dotnet build sms-service/SmsService.sln --no-restore --property:WarningLevel=0
 
     - name: Unit Tests
-      run: dotnet test SmsService.sln --logger "trx" --results-directory ./TestResults --no-build --no-restore
+      run: dotnet test sms-service/SmsService.sln --logger "trx" --results-directory ./TestResults --no-build --no-restore
