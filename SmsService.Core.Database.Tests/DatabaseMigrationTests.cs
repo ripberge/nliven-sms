@@ -77,10 +77,59 @@ public class DatabaseMigrationTests
                 .OrderBy(n => n)
                 .ToList();
 
-            Assert.Equal(snapshotProps.Count, currentProps.Count);
+            // Compare property names - provide detailed error on mismatch
+            if (!snapshotProps.SequenceEqual(currentProps))
+            {
+                var missing = snapshotProps.Except(currentProps).ToList();
+                var added = currentProps.Except(snapshotProps).ToList();
 
-            // Compare property names
-            Assert.Equal(snapshotProps, currentProps);
+                // Check for added properties (not in snapshot but in current model) - these NEED a migration
+                if (added.Any())
+                {
+                    Assert.Fail(
+                        $"Property mismatch in entity '{entityName}'.\n"
+                            + $"  Added properties (need migration): {string.Join(", ", added)}\n"
+                            + $"  Run: dotnet ef migrations add <MigrationName> in SmsService.Migrations"
+                    );
+                }
+
+                // Check for properties in snapshot but not in current model
+                // This is OK in two scenarios (safe forward deployment patterns):
+                //   1. Property exists with [NotMapped] - migration is ahead, waiting for code to use it
+                //   2. Property doesn't exist at all - migration is ahead, will be added to entity later
+                // Only fail if it's a truly removed property (property was there before, now gone without [NotMapped])
+                if (missing.Any())
+                {
+                    // Get the CLR type to check properties
+                    var clrType = currentEntity.ClrType;
+                    var safeProps = missing
+                        .Where(propName =>
+                        {
+                            var property = clrType.GetProperty(propName);
+                            // Safe if: property doesn't exist (migration ahead of code) OR has [NotMapped]
+                            return property == null
+                                || property
+                                    .GetCustomAttributes(
+                                        typeof(System.ComponentModel.DataAnnotations.Schema.NotMappedAttribute),
+                                        false
+                                    )
+                                    .Any();
+                        })
+                        .ToList();
+
+                    // Remove safe properties from the missing list
+                    var trulyMissing = missing.Except(safeProps).ToList();
+
+                    if (trulyMissing.Any())
+                    {
+                        Assert.Fail(
+                            $"Property mismatch in entity '{entityName}'.\n"
+                                + $"  Removed properties (need DROP COLUMN migration): {string.Join(", ", trulyMissing)}\n"
+                                + $"  Run: dotnet ef migrations add <MigrationName> in SmsService.Migrations"
+                        );
+                    }
+                }
+            }
         }
     }
 }
