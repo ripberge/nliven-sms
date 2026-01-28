@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SmsService.Core.Interfaces;
+using Newtonsoft.Json.Converters;
 using SmsService.Domain.Data;
 
 namespace SmsService.Api.Configuration;
@@ -14,6 +15,13 @@ public static class ServiceConfiguration
         IConfiguration configuration
     )
     {
+        services
+            .AddControllers()
+            .AddNewtonsoftJson(options =>
+            {
+                options.SerializerSettings.Converters.Add(new StringEnumConverter());
+            });
+
         // Add health checks
         services.AddHealthChecks();
 
