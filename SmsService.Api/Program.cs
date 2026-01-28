@@ -16,7 +16,6 @@ Log.Logger = new LoggerConfiguration()
 
 builder.Host.UseSerilog();
 
-// Add services
 builder.Services.AddHealthChecks();
 builder.Services.ConfigureApiServices(builder.Configuration);
 
@@ -34,6 +33,8 @@ if (!app.Environment.IsProduction())
 }
 
 // Configure middleware
+app.MapControllers();
+
 app.MapHealthChecks(
     "/healthz/ready",
     new HealthCheckOptions { Predicate = healthCheck => healthCheck.Tags.Contains("ready") }
