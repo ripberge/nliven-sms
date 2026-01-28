@@ -12,6 +12,20 @@ on:
   workflow_call: ~
 
 jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      domain: ${{ steps.filter.outputs.domain }}
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dorny/paths-filter@v3
+      id: filter
+      with:
+        filters: |
+          domain:
+            - 'SmsService.Domain/**'
+            - '.github/workflows/build-unit-test.yaml'
+
   build-and-unit-test:
     runs-on: ubuntu-latest
     name: Build and Unit Test dotnet
@@ -22,6 +36,15 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
+      with:
+        path: sms-service
+    
+    - uses: actions/checkout@v4
+      with:
+        repository: ripberge/sms-service-db
+        path: sms-service-db
+        ref: main
+        token: ${{ secrets.DB_REPO_ACCESS_TOKEN }}
     
     - name: Setup .NET
       uses: actions/setup-dotnet@v3
@@ -29,10 +52,43 @@ jobs:
         dotnet-version: '10.0.x'
 
     - name: Restore
-      run: dotnet restore SmsService.sln
+      run: dotnet restore sms-service/SmsService.sln
 
     - name: Build
-      run: dotnet build SmsService.sln --no-restore --property:WarningLevel=0
+      run: dotnet build sms-service/SmsService.sln --no-restore --property:WarningLevel=0
 
     - name: Unit Tests
-      run: dotnet test SmsService.sln --logger "trx" --results-directory ./TestResults --no-build --no-restore
+      run: dotnet test sms-service/SmsService.sln --logger "trx" --results-directory ./TestResults --no-build --no-restore
+
+  database-migration-tests:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.domain == 'true'
+    runs-on: ubuntu-latest
+    name: Database Migration Tests
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: write
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        path: sms-service
+    
+    - uses: actions/checkout@v4
+      with:
+        repository: ripberge/sms-service-db
+        path: sms-service-db
+        ref: main
+        token: ${{ secrets.DB_REPO_ACCESS_TOKEN }}
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Restore
+      run: dotnet restore sms-service-db/SmsServiceDB.sln
+
+    - name: Database Migration Tests
+      run: dotnet test sms-service-db/SmsServiceDB.sln --filter "FullyQualifiedName~SmsService.Migrations.Tests" --logger "trx" --results-directory ./TestResults --no-restore
