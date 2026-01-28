@@ -14,7 +14,6 @@ public class SmsSendHistoryConfiguration : IEntityTypeConfiguration<SmsSendHisto
         builder.Property(s => s.Id).ValueGeneratedOnAdd();
 
         builder.Property(s => s.OrderId).IsRequired();
-        builder.HasIndex(s => s.OrderId);
 
         builder.Property(s => s.VenueId).IsRequired();
         builder.HasIndex(s => s.VenueId);
@@ -24,7 +23,6 @@ public class SmsSendHistoryConfiguration : IEntityTypeConfiguration<SmsSendHisto
         builder.Property(s => s.CustomerId).IsRequired();
 
         builder.Property(s => s.CustomerPhoneNumber).IsRequired().HasMaxLength(20);
-        builder.HasIndex(s => s.CustomerPhoneNumber);
 
         builder.Property(s => s.Message).IsRequired().HasMaxLength(500);
 
@@ -37,11 +35,9 @@ public class SmsSendHistoryConfiguration : IEntityTypeConfiguration<SmsSendHisto
         builder.Property(s => s.ErrorCode).HasMaxLength(50);
 
         builder.Property(s => s.CreatedAt).IsRequired().HasColumnType("datetime2");
-        builder.HasIndex(s => s.CreatedAt);
 
         // Composite indexes
         builder.HasIndex(s => new { s.VenueId, s.CreatedAt });
-        builder.HasIndex(s => new { s.CustomerPhoneNumber, s.VenueId });
 
         // Foreign key
         builder
