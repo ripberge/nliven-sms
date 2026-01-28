@@ -29,8 +29,7 @@ public static class ServiceConfiguration
         // Register NoOp SMS Provider for testing
         services.AddScoped<ISmsProvider, NoOpSmsProvider>();
 
-        // Register SMS Provider with HttpClient (commented out)
-        // services.AddHttpClient();
+        services.AddHttpClient();
         // services.AddScoped<ISmsProvider>(serviceProvider =>
         // {
         //     var httpClientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();

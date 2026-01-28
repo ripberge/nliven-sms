@@ -16,7 +16,7 @@ Log.Logger = new LoggerConfiguration()
 
 builder.Host.UseSerilog();
 
-// Add services
+builder.Services.AddHealthChecks();
 builder.Services.ConfigureApiServices(builder.Configuration);
 
 // Add Swagger
