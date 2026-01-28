@@ -24,16 +24,6 @@ builder.Services.ConfigureApiServices(builder.Configuration);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Register Plivo provider
-var plivoConfig = builder.Configuration.GetSection("Plivo");
-builder.Services.AddSingleton<ISmsProvider>(
-    new PlivoSmsProvider(
-        plivoConfig["AuthId"],
-        plivoConfig["AuthToken"],
-        plivoConfig["SenderNumber"]
-    )
-);
-
 var app = builder.Build();
 
 // Configure Swagger
@@ -67,3 +57,6 @@ app.MapPost(
 app.Run();
 
 Log.CloseAndFlush();
+
+// Make Program class accessible to integration tests
+public partial class Program { }
